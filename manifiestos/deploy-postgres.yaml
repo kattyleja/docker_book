@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+  labels:
+    app: database-service
+  name: database-service
+  namespace: docker-book
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: database-service
+  template:
+    metadata:
+      labels:
+        app: database-service
+        version: ""
+    spec:
+      containers:
+      - image: lramirezq/book-db:0.1
+        imagePullPolicy: IfNotPresent
+        name: database-service
+        ports:
+        - containerPort: 5432
+          protocol: TCP
+      restartPolicy: Always
+      schedulerName: default-scheduler

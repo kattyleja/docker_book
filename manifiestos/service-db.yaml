@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-db
+  namespace: docker-book
+  labels:
+    app: database-service
+spec:
+  ports:
+  - port: 5432
+    name: postgres
+  selector:
+    app: database-service
+  type: ClusterIP
