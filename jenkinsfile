@@ -1,0 +1,191 @@
+//Pipeline para despligue en AWS EKS
+// Luis Ramirez Q.
+// lramirez@3htp.com
+pipeline {
+    agent any
+    //todos los params necesarios
+    parameters {
+        //datos AWS necesarios
+        string(name: 'AWS_ACCESS_KEY_ID', defaultValue: 'AAAAAAAAAAAAAAAAAAAA', description: 'AWS_ACCESS_KEY_ID')
+        string(name: 'AWS_SECRET_ACCESS_KEY', defaultValue: 'BBBBBBBBBBBBBBBB', description: 'AWS_SECRET_ACCESS_KEY')
+        string(name: 'AWS_DEFAULT_REGION', defaultValue: 'us-east-1', description: 'AWS_DEFAULT_REGION')
+        string(name: 'AWS_REPO', defaultValue: '012345678912.dkr.ecr.us-east-1.amazonaws.com', description: 'AWS_REPO')
+        string(name: 'ECR_NAME', defaultValue: 'lramirez', description: 'Nombre Repositorio ECR')
+        string(name: 'AWS_CLUSTER_NAME', defaultValue: 'CLUSTER-QA', description: 'Nombre Cluster EKS')
+
+        //Datos de applicacion a reemplazar
+        string(name: 'datasource_url', defaultValue: 'jdbc:postgresql://localhost:5432/docker_book', description: 'URL JDBC APP')
+        string(name: 'datasource_username', defaultValue: 'book', description: 'Usuario DB')
+        string(name: 'datasource_password', defaultValue: 'book', description: 'Password DB')
+        string(name: 'log_level', defaultValue: 'DEBUG', description: 'Nivel de Log')
+
+        //Datos for deployment
+        string(name: 'configmap', defaultValue: 'rest-service', description: 'Nombre CM asociado a App')
+        string(name: 'namespace', defaultValue: 'lramirez', description: 'Nombre Namespace en Cluster EKS')
+
+        
+
+    }
+    stages {
+        stage('Get Code') {
+            steps {
+                deleteDir()
+                // Get some code from a GitHub repository
+                sh "export"
+                sh "ls -ltra"
+                git 'https://github.com/lramirezq/docker_book.git'
+            }
+        }
+        stage('Replace Values') {
+            steps {
+                    sh '''
+                    #!/bin/bash
+                    for i in $FilesCM; 
+                    do 
+                        pathFile=$(find . -name $i)
+                        tokens=$(grep -o -P '(?<=&).*(?=&)' $pathFile)
+                        echo "tokens = $tokens"
+                        for t in $tokens;
+                        do
+                            
+                            valor_new=$(export | grep $t | cut -d = -f 2 | sed -e 's/^.//' -e 's/.$//')
+                            echo "debemos reemplazar $t por $valor_new" 
+                            echo "sed -i 's|&$t&|$valor_new|g' $pathFile" >> replace_token.sh
+                        done
+                        chmod +x replace_token.sh
+                        ./replace_token.sh
+                        rm -f replace_token.sh
+                    done
+                
+                    '''
+            }
+        }
+        stage('Compile') {
+            steps {
+               
+                // Compilar con Maven
+                sh "mvn clean compile package"
+            }
+        }
+        stage('Build Tag Push Image') {
+            steps {
+                // Conectar con ECR
+                sh "aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_REPO/$ECR_NAME"
+
+                // Crear Imagen
+                sh 'docker build -t $ECR_NAME:$BUILD_NUMBER .'
+
+                // Tag imagen
+                sh 'docker tag $ECR_NAME:$BUILD_NUMBER $AWS_REPO/$ECR_NAME:$BUILD_NUMBER '
+                sh 'docker push $AWS_REPO/$ECR_NAME:$BUILD_NUMBER'
+            }
+        }
+
+        stage('Create ConfigMap') {
+            steps {
+                // Conectar con Cluster
+                sh "aws eks --region $AWS_DEFAULT_REGION  update-kubeconfig --name $AWS_CLUSTER_NAME "
+                sh "kubectl delete cm $configmap -n $namespace"
+                sh '''
+                    for i in $FilesCM; 
+                    do 
+                        pathFile=$(find . -name $i -print -quit)
+                        kubectl create cm $configmap --from-file=$pathFile -n $namespace
+                    done
+                '''
+            }
+        }
+
+        stage('Deploy K8s') {
+            steps {
+                // Conectar con Cluster
+                sh "aws eks --region $AWS_DEFAULT_REGION  update-kubeconfig --name $AWS_CLUSTER_NAME "
+                sh '''
+cat << EOF > Deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+  labels:
+    app: service-rest
+  name: service-rest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-rest
+  template:
+    metadata:
+      labels:
+        app: service-rest
+        version: ""
+    spec:
+      containers:
+      - args:
+        - java -jar /app/demo-docker-0.0.1-SNAPSHOT.jar --spring.config.location=/app/application.properties
+        command:
+        - /bin/sh
+        - -c
+        image: lramirezq/book-app:0.1
+        env:
+          - name: LRQ
+            value: "este es el valor"
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 240
+          periodSeconds: 20
+          successThreshold: 1
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 1
+        name: msdataauth
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 6
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          successThreshold: 1
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 300m
+            memory: 1536Mi
+          requests:
+            cpu: 200m
+            memory: 512Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /app/application.properties
+          name: conf-volumen
+          subPath: application.properties
+        imagePullPolicy: IfNotPresent
+        
+        name: service-rest
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      volumes:
+      - configMap:
+          items:
+          - key: application.properties
+            path: application.properties
+          name: rest-service
+        name: conf-volumen
+EOF
+                '''
+            sh "ls -ltr"
+            sh "kubectl apply -f Deployment.yaml -n $namespace"               
+            }
+        }
+    }
+}
+
+  
