@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dockerbook-pvc
+spec:
+  storageClassName: "blockvolume.csi.oraclecloud.com" 
+  volumeName: dockerbook-pv
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: dockerbook-pv
+spec:
+  storageClassName: "blockvolume.csi.oraclecloud.com"
+  claimRef:
+    name: dockerbook-pvc
