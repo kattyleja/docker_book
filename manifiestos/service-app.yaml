@@ -11,4 +11,4 @@ spec:
     name: http
   selector:
     app: service-rest
-  type: NodePort
+  type: LoadBalancer
