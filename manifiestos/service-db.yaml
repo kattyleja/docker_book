@@ -13,4 +13,3 @@ spec:
     app: database-service
   type: ClusterIP
 ##
-##
