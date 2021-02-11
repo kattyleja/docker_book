@@ -23,7 +23,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        image: kattyleja/docker_book:latest
+        image: kattyleja/docker_book:1
         env:
           - name: LRQ
             value: "este es el valor"
