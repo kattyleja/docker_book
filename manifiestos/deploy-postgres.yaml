@@ -5,7 +5,7 @@ metadata:
   labels:
     app: database-service
   name: database-service
-  namespace: docker-book
+  namespace: jenkins
 spec:
   replicas: 1
   selector:
@@ -18,7 +18,7 @@ spec:
         version: ""
     spec:
       containers:
-      - image: lramirezq/book-db:0.1
+      - image: kattyleja/docker_db:latest
         imagePullPolicy: IfNotPresent
         name: database-service
         ports:

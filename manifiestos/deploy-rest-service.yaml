@@ -5,7 +5,7 @@ metadata:
   labels:
     app: service-rest
   name: service-rest
-  namespace: docker-book
+  namespace: jenkins
 spec:
   replicas: 1
   selector:
@@ -23,7 +23,7 @@ spec:
         command:
         - /bin/sh
         - -c
-        image: lramirezq/book-app:0.1
+        image: kattyleja/docker_book:latest
         env:
           - name: LRQ
             value: "este es el valor"

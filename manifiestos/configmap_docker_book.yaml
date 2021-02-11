@@ -1,4 +1,8 @@
 apiVersion: v1
+metadata:
+  creationTimestamp: null
+  name: rest-service
+  namespace: jenkins
 data:
   application.properties: |
     spring.datasource.url=jdbc:postgresql://svc-db:5432/docker_book
@@ -8,7 +12,3 @@ data:
     logging.level.org.springframework.web: DEBUG
     logging.level.org.hibernate: ERROR
 kind: ConfigMap
-metadata:
-  creationTimestamp: null
-  name: rest-service
-  namespace: docker-book
