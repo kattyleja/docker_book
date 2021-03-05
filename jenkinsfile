@@ -49,10 +49,39 @@ pipeline {
         }
         stage('Despliegue K8S'){
             steps{
-                sh 'pwd'
-                sh 'echo "Desplegando a Cluster k8s 3HTP"'
-                sh 'export KUBECONFIG=/home/jenkins/config && kubectl version && kubectl apply -f ./manifiestos/ && kubectl get po -n jenkins'
+            step([$class: 'UCDeployPublisher',
+                siteName: 'urban-jenkins',
+                component: [
+                    $class: 'com.urbancode.jenkins.plugins.ucdeploy.VersionHelper$VersionBlock',
+                    componentName: 'dmunoz-k8s',
+                    delivery: [
+                        $class: 'com.urbancode.jenkins.plugins.ucdeploy.DeliveryHelper$Push',
+                        pushVersion: '${BUILD_NUMBER}',
+                        baseDir: '/var/lib/jenkins/workspace/Jenkinsfile-UCD/manifiestos',
+                        fileIncludePatterns: '*',
+                        fileExcludePatterns: '',
+                        pushProperties: 'jenkins.server=Local\njenkins.reviewed=false',
+                        pushDescription: 'Pushed from Jenkins',
+                        pushIncremental: false
+                    ]
+                ]
+            ])
+            
+            step([$class: 'UCDeployPublisher',
+                siteName: 'urban-jenkins',
+                deploy: [
+                    $class: 'com.urbancode.jenkins.plugins.ucdeploy.DeployHelper$DeployBlock',
+                    deployApp: 'dmunoz-k8s',
+                    deployEnv: 'PROD 1',
+                    deployProc: 'Deploy from YAML file',
+                    deployVersions: 'dmunoz-k8s:${BUILD_NUMBER}',
+                    deployOnlyChanged: false
+                ]
+            ])
+            
+            
             }
         }
     }
 }
+
